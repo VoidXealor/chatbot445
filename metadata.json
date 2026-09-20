@@ -1,0 +1,6 @@
+{
+  "name": "Offline Mobile LLM Chatbot",
+  "description": "A 100% offline, private mobile chatbot running PC-class open-source LLMs directly on your device with download management, crash prevention guards, and a ChatGPT/Gemini conversational experience.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
