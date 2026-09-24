@@ -19,7 +19,7 @@ export interface ModelMetadata {
   recommendedRamGb: number;
   speedRating: 'Ultra Fast' | 'Fast' | 'Balanced' | 'Advanced';
   crashRisk: 'None (Safe)' | 'Very Low' | 'Low' | 'Moderate' | 'High';
-  hasReasoning: boolean; // DeepSeek-R1 / Gemini Thinking style
+  hasReasoning: boolean; // DeepSeek-R1 / Qwen Thinking style
   contextWindow: number;
   description: string;
   tags: string[];

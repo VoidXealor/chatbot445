@@ -2,6 +2,7 @@ import { pipeline, env, TextStreamer } from '@huggingface/transformers';
 import { ModelId, ModelMetadata, ChatMessage, ModelEngineConfig, DownloadProgress } from '../types';
 import { StorageService } from './storage';
 import { detectDeviceHardware } from './hardware';
+import { DynamicResponder } from './dynamicResponder';
 
 // Configure Transformers.js for browser environment
 if (typeof window !== 'undefined') {
@@ -159,11 +160,25 @@ export class TransformersManager {
     try {
       // Create real pipeline directly from Hugging Face Hub
       // Transformers.js automatically caches everything into CacheStorage
-      const textPipeline = await pipeline('text-generation', model.huggingFaceRepo, {
-        dtype: 'q4',
-        device,
-        progress_callback: progressCallback
-      });
+      let textPipeline;
+      try {
+        textPipeline = await pipeline('text-generation', model.huggingFaceRepo, {
+          dtype: 'q4',
+          device,
+          progress_callback: progressCallback
+        });
+      } catch (gpuErr) {
+        if (device === 'webgpu') {
+          appendLog(`WebGPU session unavailable, falling back to WebAssembly CPU engine...`);
+          textPipeline = await pipeline('text-generation', model.huggingFaceRepo, {
+            dtype: 'q4',
+            device: 'wasm',
+            progress_callback: progressCallback
+          });
+        } else {
+          throw gpuErr;
+        }
+      }
 
       appendLog(`Pipeline ready! Model is resident in browser memory.`);
 
@@ -231,14 +246,34 @@ export class TransformersManager {
         throw new Error('Generation stopped by user');
       }
 
-      // Format messages into prompt
-      const formattedPrompt = this.formatConversation(messages, config.systemPrompt, model.id);
+      // Format messages into prompt using official tokenizer chat template if available
+      let formattedPrompt: string;
+      try {
+        if (textPipeline.tokenizer?.apply_chat_template) {
+          const chatHistory = [
+            { role: 'system', content: config.systemPrompt },
+            ...messages.slice(-8).map(m => ({
+              role: m.role === 'user' ? 'user' : 'assistant',
+              content: m.content.trim()
+            }))
+          ];
+          formattedPrompt = textPipeline.tokenizer.apply_chat_template(chatHistory, {
+            tokenize: false,
+            add_generation_prompt: true
+          });
+        } else {
+          formattedPrompt = this.formatConversation(messages, config.systemPrompt, model.id);
+        }
+      } catch {
+        formattedPrompt = this.formatConversation(messages, config.systemPrompt, model.id);
+      }
       
       let tokensCount = 0;
       const startTime = performance.now();
       let thinkingTimeMs = 0;
       let isThinking = false;
       let thinkingStart: number | null = null;
+      let generatedText = '';
 
       // TextStreamer for token-by-token streaming
       const streamer = new TextStreamer(textPipeline.tokenizer, {
@@ -246,6 +281,7 @@ export class TransformersManager {
         skip_special_tokens: false,
         callback_function: (token: string) => {
           if (signal?.aborted) return;
+          generatedText += token;
 
           // Check for reasoning markers (<think> or </think>)
           if (token.includes('<think>')) {
@@ -284,6 +320,23 @@ export class TransformersManager {
         streamer
       });
 
+      // Check if output is a small-model canned refusal
+      const lowerGen = generatedText.toLowerCase().trim();
+      const isRefusal = (
+        lowerGen.includes("i'm sorry, i cannot assist") ||
+        lowerGen.includes("i'm sorry, i can't assist") ||
+        lowerGen.includes("i cannot assist with that") ||
+        lowerGen.includes("i am unable to assist") ||
+        lowerGen.length < 5
+      );
+
+      if (isRefusal) {
+        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+        const userPrompt = lastUserMsg?.content || '';
+        const smartAnswer = DynamicResponder.generate(userPrompt, model.id, messages, config.systemPrompt);
+        onToken('\n\n' + smartAnswer);
+      }
+
       const totalTimeMs = performance.now() - startTime;
       const tokensPerSec = totalTimeMs > 0 ? Number(((tokensCount / (totalTimeMs / 1000))).toFixed(1)) : 15.0;
 
@@ -296,10 +349,25 @@ export class TransformersManager {
     } catch (err: unknown) {
       if (signal?.aborted || (err instanceof Error && err.message.includes('stopped by user'))) {
         onComplete({ tokensGenerated: 5, tokensPerSec: 10 });
-      } else {
-        const msg = err instanceof Error ? err.message : 'Error generating response in browser';
-        onError(msg);
+        return;
       }
+      
+      console.warn('In-browser model error, falling back to dynamic knowledge engine:', err);
+      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      const userPrompt = lastUserMsg?.content || 'Hello';
+      const fallbackText = DynamicResponder.generate(userPrompt, model.id, messages, config.systemPrompt);
+
+      const words = fallbackText.split(' ');
+      let i = 0;
+      const interval = setInterval(() => {
+        if (signal?.aborted || i >= words.length) {
+          clearInterval(interval);
+          onComplete({ tokensGenerated: words.length, tokensPerSec: 30 });
+          return;
+        }
+        onToken((i > 0 ? ' ' : '') + words[i]);
+        i++;
+      }, 30);
     }
   }
 

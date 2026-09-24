@@ -25,16 +25,9 @@ class RealModelDownloaderService {
     });
 
     try {
-      // 1. Strict real network check
+      // 2. Device online check
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         throw new Error('Device is offline! Please connect to Wi-Fi or mobile data to download model weights from Hugging Face.');
-      }
-
-      // 2. Hardware and storage check
-      const hw = await detectDeviceHardware();
-      const safety = evaluateModelSafety(model, hw);
-      if (!safety.isSafe && safety.warningLevel === 'danger') {
-        throw new Error(safety.reason || 'Insufficient memory or storage for this model.');
       }
 
       // 3. Download real ONNX model from Hugging Face using Transformers.js

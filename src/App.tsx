@@ -18,6 +18,7 @@ import { ModelDownloadModal } from './components/ModelDownloadModal';
 import { DeviceStatsModal } from './components/DeviceStatsModal';
 import { SettingsModal } from './components/SettingsModal';
 import { EmptyChatState } from './components/EmptyChatState';
+import { InstallApkModal } from './components/InstallApkModal';
 import { Smartphone, Monitor, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export default function App() {
@@ -41,6 +42,7 @@ export default function App() {
   const [isTelemetryOpen, setIsTelemetryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [deviceFrameMode, setDeviceFrameMode] = useState<boolean>(false);
 
   // Engine config
@@ -49,7 +51,7 @@ export default function App() {
       temperature: 0.7,
       topP: 0.9,
       maxTokens: 2048,
-      systemPrompt: 'You are an intelligent, helpful AI running 100% locally and privately on the user\'s mobile device.',
+      systemPrompt: 'You are a helpful, direct, and capable AI assistant running locally and privately. Answer questions clearly, accurately, and politely without unnecessary disclaimers.',
       enableThinking: true,
       streamSpeed: 'natural',
       compilationBackend: 'auto',
@@ -98,15 +100,20 @@ export default function App() {
 
   const handleInstallApp = async () => {
     if (deferredInstallPrompt) {
-      deferredInstallPrompt.prompt();
-      const choice = await deferredInstallPrompt.userChoice;
-      if (choice.outcome === 'accepted') {
-        setIsAppInstalled(true);
-        setDeferredInstallPrompt(null);
+      try {
+        deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice;
+        if (choice.outcome === 'accepted') {
+          setIsAppInstalled(true);
+          setDeferredInstallPrompt(null);
+          return;
+        }
+      } catch (err) {
+        console.error('Install prompt error:', err);
       }
-    } else {
-      alert('To install Offline LLM on your mobile home screen:\n\n1. Tap the Share button in Safari or Chrome\n2. Select "Add to Home Screen"');
     }
+    // Open install & APK guide modal
+    setIsInstallModalOpen(true);
   };
 
   // Initialize on mount
@@ -396,8 +403,8 @@ export default function App() {
         onNewChat={createNewChat}
         onOpenTelemetry={() => setIsTelemetryOpen(true)}
         hardware={hardware}
-        onInstallApp={!isAppInstalled ? handleInstallApp : undefined}
-        canInstallApp={!isAppInstalled}
+        onInstallApp={handleInstallApp}
+        canInstallApp={true}
       />
 
       {/* Crash Guard Alert Banner if any */}
@@ -476,6 +483,13 @@ export default function App() {
           setIsDownloadModalOpen(true);
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenInstallModal={() => setIsInstallModalOpen(true)}
+      />
+
+      {/* Install App & PWABuilder APK Modal */}
+      <InstallApkModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
       />
 
       {/* Model Download Hub Modal */}

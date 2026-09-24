@@ -4,7 +4,8 @@ import { createServer as createViteServer } from 'vite';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
+  const isDev = process.env.NODE_ENV === 'development';
 
   app.use(express.json());
 
@@ -19,7 +20,7 @@ async function startServer() {
   });
 
   // Vite middleware in dev, static files in production
-  if (process.env.NODE_ENV !== 'production') {
+  if (isDev) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -34,7 +35,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Pure client-side LLM server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://0.0.0.0:${PORT} (${isDev ? 'development' : 'production'})`);
   });
 }
 

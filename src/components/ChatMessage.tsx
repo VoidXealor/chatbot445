@@ -92,7 +92,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           )}
         </div>
 
-        {/* DeepSeek-R1 / Gemini Thinking Process Accordion */}
+        {/* DeepSeek-R1 / Reasoning Chain-of-Thought Accordion */}
         {message.reasoningContent && (
           <div className="rounded-xl bg-neutral-900/90 border border-neutral-800 overflow-hidden text-xs">
             <button

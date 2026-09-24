@@ -119,7 +119,9 @@ export const ModelDownloadModal: React.FC<ModelDownloadModalProps> = ({
         }
       },
       resumeBytes
-    );
+    ).catch((err: unknown) => {
+      console.error('Download error caught in UI:', err);
+    });
   };
 
   const handlePauseDownload = (modelId: ModelId) => {
